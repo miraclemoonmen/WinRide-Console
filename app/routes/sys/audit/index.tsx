@@ -1,3 +1,4 @@
+import { useLatestRequest } from "~/hooks/useLatestRequest";
 import {
   Badge,
   Button,
@@ -51,6 +52,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function Index() {
+  const { run: loadDetail, cancel: cancelDetail } = useLatestRequest();
   const [selectedPostAudit, setSelectedPostAudit] =
     useState<SelectedPostAudit | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
@@ -60,10 +62,15 @@ export default function Index() {
 
   const openAuditDetail = async (record: AuditRecord) => {
     try {
-      const detail =
-        record.bizType === 1
-          ? requireApiSuccess(await getPostAuditDetail(record.bizId))
-          : requireApiSuccess(await getCommentAuditDetail(record.bizId));
+      const detail = await loadDetail<SelectedPostAudit["detail"]>(
+        async signal =>
+          record.bizType === 1
+            ? requireApiSuccess(await getPostAuditDetail(record.bizId, signal))
+            : requireApiSuccess(
+                await getCommentAuditDetail(record.bizId, signal),
+              ),
+      );
+      if (!detail) return;
       setSelectedPostAudit({
         auditId: record.id,
         status: record.status,
@@ -188,6 +195,7 @@ export default function Index() {
   const navigation = useNavigation();
   const { form, initialValues, handleSearch, handleReset, onPageChange } =
     useTableQuery<AuditQueryForm>({
+      pageSize: data.size,
       dateFields: ["createdAtRange"],
     });
 
@@ -257,7 +265,10 @@ export default function Index() {
             record={selectedPostAudit.detail}
             auditMeta={selectedPostAudit.auditMeta}
             open
-            onClose={() => setSelectedPostAudit(null)}
+            onClose={() => {
+              cancelDetail();
+              setSelectedPostAudit(null);
+            }}
             onApproved={async () => {
               setSelectedPostAudit(null);
               await revalidator.revalidate();

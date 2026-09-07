@@ -9,8 +9,11 @@ export const getManagedContents = (type: ContentType, params: string) =>
     params,
   });
 
-export const getManagedContent = (type: ContentType, id: string) =>
-  http<ManagedContent>(`/content/${type}/${id}`);
+export const getManagedContent = (
+  type: ContentType,
+  id: string,
+  signal?: AbortSignal,
+) => http<ManagedContent>(`/content/${type}/${id}`, { signal });
 
 export const deleteManagedContent = (
   type: ContentType,

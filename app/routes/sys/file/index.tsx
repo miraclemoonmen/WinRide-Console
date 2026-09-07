@@ -50,9 +50,9 @@ const STATUS_MAP = {
   error: "exception",
 } as const;
 interface FormValues extends Record<string, unknown> {
-  name?: string;
+  keyword?: string;
   status?: number;
-  createTimeRange?: [Dayjs, Dayjs];
+  createdAtRange?: [Dayjs, Dayjs];
 }
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -202,6 +202,7 @@ export default function Index() {
   ];
   const { form, initialValues, handleSearch, handleReset, onPageChange } =
     useTableQuery<FormValues>({
+      pageSize: data.size,
       dateFields: ["createdAtRange"],
     });
 

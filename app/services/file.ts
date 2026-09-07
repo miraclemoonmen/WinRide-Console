@@ -14,16 +14,21 @@ export async function getFiles(params: QueryParams) {
   });
 }
 
-export async function getUploadAuth(data: FileUploadInput) {
+export async function getUploadAuth(
+  data: FileUploadInput,
+  signal?: AbortSignal,
+) {
   return http<UploadPrepare>("/files", {
     method: "POST",
     data,
+    signal,
   });
 }
 
-export async function confirmUpload(id: string) {
+export async function confirmUpload(id: string, signal?: AbortSignal) {
   return http<boolean>(`/files/complete/${id}`, {
     method: "POST",
+    signal,
   });
 }
 

@@ -13,14 +13,17 @@ const bucket = import.meta.env.VITE_BUCKET;
 export default function useUpload() {
   const [fileList, setFileList] = useState<PreviewUploadFile[]>([]);
   const revalidator = useRevalidator();
+  const activeUploads = useRef(new Set<AbortController>());
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const uploads = activeUploads.current;
+    return () => {
+      uploads.forEach(controller => controller.abort());
+      uploads.clear();
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   const scheduleListRefresh = () => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -40,20 +43,29 @@ export default function useUpload() {
       onError?.(new Error("无法读取文件"));
       return;
     }
+    const controller = new AbortController();
+    const { signal } = controller;
+    activeUploads.current.add(controller);
     let xhr: XMLHttpRequest | null = null;
+    const abortTransfer = () => xhr?.abort();
+    signal.addEventListener("abort", abortTransfer, { once: true });
     void (async () => {
       try {
         const data = requireApiSuccess(
-          await getUploadAuth({
-            fileName:
-              file instanceof File || "name" in file
-                ? String(file.name)
-                : "upload.bin",
-            fileSize: file.size,
-            contentType: file.type,
-            bucket,
-          }),
+          await getUploadAuth(
+            {
+              fileName:
+                file instanceof File || "name" in file
+                  ? String(file.name)
+                  : "upload.bin",
+              fileSize: file.size,
+              contentType: file.type,
+              bucket,
+            },
+            signal,
+          ),
         );
+        signal.throwIfAborted();
         xhr = new XMLHttpRequest();
         xhr.open("PUT", data.uploadUrl);
         xhr.timeout = 120_000;
@@ -78,20 +90,28 @@ export default function useUpload() {
           );
           xhr.send(file);
         });
+        signal.throwIfAborted();
         onProgress?.({ percent: 95 });
-        const confirmed = requireApiSuccess(await confirmUpload(data.id));
+        const confirmed = requireApiSuccess(
+          await confirmUpload(data.id, signal),
+        );
+        signal.throwIfAborted();
         if (confirmed !== true) throw new Error("服务器未确认文件，请重试");
         onSuccess?.(data.id);
         scheduleListRefresh();
       } catch (error) {
+        if (signal.aborted) return;
         onError?.(
           error instanceof Error ? error : new Error("上传失败，请重试"),
         );
+      } finally {
+        signal.removeEventListener("abort", abortTransfer);
+        activeUploads.current.delete(controller);
       }
     })();
 
     return {
-      abort: () => xhr?.abort(),
+      abort: () => controller.abort(),
     };
   };
   return {

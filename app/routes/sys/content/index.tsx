@@ -1,3 +1,4 @@
+import { useLatestRequest } from "~/hooks/useLatestRequest";
 import {
   Badge,
   Button,
@@ -70,6 +71,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function ContentManagementPage() {
+  const { run: loadDetail, cancel: cancelDetail } = useLatestRequest();
   const { type, data } = useLoaderData<typeof clientLoader>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
@@ -85,11 +87,17 @@ export default function ContentManagementPage() {
     handleSearch,
     handleReset,
     onPageChange,
-  } = useTableQuery<FilterForm>({ dateFields: ["createdAtRange"] });
+  } = useTableQuery<FilterForm>({
+    pageSize: data.size,
+    dateFields: ["createdAtRange"],
+  });
 
   const openDetail = async (record: ManagedContent) => {
     try {
-      const result = await getManagedContent(type, record.id);
+      const result = await loadDetail(signal =>
+        getManagedContent(type, record.id, signal),
+      );
+      if (!result) return;
       setDetail(requireApiSuccess(result));
       setDetailOpen(true);
     } catch (error: unknown) {
@@ -302,7 +310,10 @@ export default function ContentManagementPage() {
       <ContentDetailsDrawer
         detail={detail}
         open={detailOpen}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          cancelDetail();
+          setDetailOpen(false);
+        }}
         onAfterClose={() => setDetail(null)}
       />
 

@@ -38,6 +38,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function Index() {
+  const data = useLoaderData<typeof clientLoader>();
   const columns: TableProps<OperationLog>["columns"] = [
     {
       title: "所属功能",
@@ -97,12 +98,12 @@ export default function Index() {
 
   const { form, initialValues, handleSearch, handleReset, onPageChange } =
     useTableQuery<LogQueryForm>({
+      pageSize: data.size,
       dateFields: ["createdAtRange"],
     });
   const [active, setActive] = useState(false);
   const [record, setRecord] = useState<OperationLog | null>(null);
   const navigation = useNavigation();
-  const data = useLoaderData<typeof clientLoader>();
   return (
     <>
       <div className="mb-6">

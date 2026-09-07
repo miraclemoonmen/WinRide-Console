@@ -1,3 +1,4 @@
+import { useLatestRequest } from "~/hooks/useLatestRequest";
 import {
   Badge,
   Button,
@@ -66,6 +67,7 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 }
 
 export default function ReportWorkbench() {
+  const { run: loadDetail, cancel: cancelDetail } = useLatestRequest();
   const data = useLoaderData<typeof clientLoader>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
@@ -78,7 +80,10 @@ export default function ReportWorkbench() {
     handleSearch,
     handleReset,
     onPageChange,
-  } = useTableQuery<ReportQueryForm>({ dateFields: ["createdAtRange"] });
+  } = useTableQuery<ReportQueryForm>({
+    pageSize: data.size,
+    dateFields: ["createdAtRange"],
+  });
 
   const confirmDestructiveAction = (action: ReportAction) =>
     new Promise<boolean>(resolve => {
@@ -178,7 +183,10 @@ export default function ReportWorkbench() {
           icon={<EyeOutlined />}
           onClick={async () => {
             try {
-              const result = await getReport(record.id);
+              const result = await loadDetail(signal =>
+                getReport(record.id, signal),
+              );
+              if (!result) return;
               if (result.code !== 0)
                 throw new Error(result.msg || "详情加载失败");
               setSelected(result.data);
@@ -279,8 +287,16 @@ export default function ReportWorkbench() {
         okText={selected?.status === -1 ? "确认处理" : "关闭"}
         cancelText="取消"
         confirmLoading={handling}
-        onOk={selected?.status === -1 ? submit : () => setSelected(null)}
+        onOk={
+          selected?.status === -1
+            ? submit
+            : () => {
+                cancelDetail();
+                setSelected(null);
+              }
+        }
         onCancel={() => {
+          cancelDetail();
           setSelected(null);
           form.resetFields();
         }}

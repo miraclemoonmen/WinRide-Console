@@ -13,11 +13,11 @@ export async function getAuditRecord(params: string) {
   });
 }
 
-export const getPostAuditDetail = (id: string) =>
-  http<PostRecord>(`/auditRecord/posts/${id}`);
+export const getPostAuditDetail = (id: string, signal?: AbortSignal) =>
+  http<PostRecord>(`/auditRecord/posts/${id}`, { signal });
 
-export const getCommentAuditDetail = (id: string) =>
-  http<CommentRecord>(`/auditRecord/comments/${id}`);
+export const getCommentAuditDetail = (id: string, signal?: AbortSignal) =>
+  http<CommentRecord>(`/auditRecord/comments/${id}`, { signal });
 
 export type AuditDecision = {
   decision: "APPROVE" | "REJECT";
