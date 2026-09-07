@@ -11,16 +11,17 @@ export function getCachedRoles(): Promise<Role[]> {
   if (rolesRequest) return rolesRequest;
 
   const requestGeneration = cacheGeneration;
-  rolesRequest = getRoleList()
+  const request = getRoleList()
     .then(requireApiSuccess)
     .then(roles => {
       if (requestGeneration === cacheGeneration) cachedRoles = roles;
       return roles;
     })
     .finally(() => {
-      rolesRequest = null;
+      if (rolesRequest === request) rolesRequest = null;
     });
-  return rolesRequest;
+  rolesRequest = request;
+  return request;
 }
 
 export function invalidateRoles(): void {

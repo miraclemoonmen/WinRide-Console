@@ -4,7 +4,7 @@ import {
   getMenuIdsByRoleId,
   updateRolePermissions,
 } from "~/services/role";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invalidateRoles } from "~/services/roleCache";
 import { useRevalidator } from "react-router";
 import type { PermissionTemplate, Role, RoleMutationInput } from "~/types/api";
@@ -27,60 +27,91 @@ export default function RolePermissionEditModal({
   );
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
   const [form] = Form.useForm<Omit<RoleMutationInput, "permissions">>();
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [previousInput, setPreviousInput] = useState({ open, data });
+  const saveRequestRef = useRef<object | null>(null);
 
   // 提示属于当前打开状态及角色；权限请求和表单回填仍由 Effect 承担。
   if (previousInput.open !== open || previousInput.data !== data) {
     setPreviousInput({ open, data });
+    setReady(false);
+    setLoading(false);
     if (open && data) setLoadError("");
   }
+
+  useLayoutEffect(
+    () => () => {
+      saveRequestRef.current = null;
+    },
+    [open, data],
+  );
+  const close = () => {
+    saveRequestRef.current = null;
+    onClose();
+  };
 
   const revalidator = useRevalidator();
   useEffect(() => {
     if (open && data) {
-      Promise.all([getPermissionList(), getMenuIdsByRoleId(data.id)])
+      const controller = new AbortController();
+      Promise.all([
+        getPermissionList(controller.signal),
+        getMenuIdsByRoleId(data.id, controller.signal),
+      ])
         .then(([templateResult, permissionResult]) => {
+          if (controller.signal.aborted) return;
           const tplData = requireApiSuccess(templateResult);
           const perData = requireApiSuccess(permissionResult);
           setPermissionTree(tplData);
           setSelectedKeys(perData);
+          form.resetFields();
           form.setFieldsValue(data);
+          setReady(true);
         })
-        .catch(error =>
-          setLoadError(getErrorMessage(error, "角色权限加载失败")),
-        );
+        .catch(error => {
+          if (!controller.signal.aborted)
+            setLoadError(getErrorMessage(error, "角色权限加载失败"));
+        });
+      return () => controller.abort();
     }
   }, [data, form, open]);
 
   const obSubmit = async () => {
-    if (!data) return;
+    if (!open || !data || !ready || saveRequestRef.current) return;
+    const request = {};
+    saveRequestRef.current = request;
     setLoading(true);
     try {
       const values = await form.validateFields();
+      if (saveRequestRef.current !== request) return;
       const { code, msg } = await updateRolePermissions({
         id: data.id,
         ...values,
         permissions: selectedKeys,
       });
-      message[code === 0 ? "success" : "error"](msg);
-      if (code === 0) {
-        onClose();
-        invalidateRoles();
-        await revalidator.revalidate();
+      if (code === 0) invalidateRoles();
+      if (saveRequestRef.current === request) {
+        message[code === 0 ? "success" : "error"](msg);
+        if (code === 0) close();
       }
+      if (code === 0) await revalidator.revalidate();
     } catch (error) {
-      message.error(getErrorMessage(error, "角色权限保存失败"));
+      if (saveRequestRef.current === request)
+        message.error(getErrorMessage(error, "角色权限保存失败"));
     } finally {
-      setLoading(false);
+      if (saveRequestRef.current === request) {
+        saveRequestRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
   return (
     <Modal
       open={open}
-      onCancel={onClose}
+      onCancel={close}
       width={700}
       centered
       mask={{ blur: false }}
@@ -97,8 +128,13 @@ export default function RolePermissionEditModal({
       closable
       footer={
         <div className="flex justify-center gap-4 pb-4">
-          <Button onClick={onClose}>取消</Button>
-          <Button loading={loading} onClick={obSubmit} type="primary">
+          <Button onClick={close}>取消</Button>
+          <Button
+            disabled={!ready}
+            loading={loading}
+            onClick={obSubmit}
+            type="primary"
+          >
             确定
           </Button>
         </div>
@@ -112,6 +148,7 @@ export default function RolePermissionEditModal({
         )}
         <h3 className="text-lg font-bold text-[#4A4A65]">基本信息</h3>
         <Form
+          disabled={loading || !ready}
           form={form}
           layout="inline"
           size="large"
@@ -142,6 +179,7 @@ export default function RolePermissionEditModal({
                 <div className="flex justify-end flex-wrap gap-x-6 gap-y-2 flex-1">
                   {item.actions.map(action => (
                     <Checkbox
+                      disabled={loading || !ready}
                       checked={selectedKeys.includes(action.id)}
                       key={action.id}
                       onChange={e => {

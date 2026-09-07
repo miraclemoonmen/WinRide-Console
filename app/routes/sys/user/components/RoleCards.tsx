@@ -3,22 +3,18 @@ import RolePermissionEditModal from "~/routes/sys/user/components/RolePermission
 import { Avatar, Button, message, Popconfirm } from "antd";
 import illustration from "~/assets/illustration.webp";
 import { useState } from "react";
-import { useLoaderData, useRevalidator } from "react-router";
+import { useRevalidator } from "react-router";
 import { DeleteTwoTone, ExclamationCircleFilled } from "@ant-design/icons";
 import { removeRole } from "~/services/role";
 import { invalidateRoles } from "~/services/roleCache";
-import type { PageResult, Role, ConsoleUser } from "~/types/api";
+import type { Role } from "~/types/api";
 const ColorList = ["#1677ff", "#52c41a", "#faad14"];
-export default function RoleCards() {
+export default function RoleCards({ roles }: { roles: Role[] }) {
   const [modalStatus, setModalStatus] = useState({
     permissionEdit: false,
     permissionAdd: false,
   });
   const [activeRole, setActiveRole] = useState<Role | null>(null);
-  const { roles } = useLoaderData<{
-    roles: Role[];
-    users: PageResult<ConsoleUser>;
-  }>();
   const revalidator = useRevalidator();
 
   return (

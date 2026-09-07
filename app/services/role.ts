@@ -14,15 +14,17 @@ export async function addRole(data: RoleMutationInput) {
   });
 }
 
-export async function getPermissionList() {
+export async function getPermissionList(signal?: AbortSignal) {
   return http<PermissionTemplate[]>(`/permissions`, {
     method: "GET",
+    signal,
   });
 }
 
-export async function getMenuIdsByRoleId(id: number) {
+export async function getMenuIdsByRoleId(id: number, signal?: AbortSignal) {
   return http<number[]>(`/roles/${id}/permissions`, {
     method: "GET",
+    signal,
   });
 }
 

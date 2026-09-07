@@ -12,13 +12,14 @@ interface Props {
   onClose: () => void;
 }
 
-export default function RolePermissionEditModal({ open, onClose }: Props) {
+export default function RolePermissionAddModal({ open, onClose }: Props) {
   const [permissionTree, setPermissionTree] = useState<PermissionTemplate[]>(
     [],
   );
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
   const revalidator = useRevalidator();
   const [form] = Form.useForm<Omit<RoleMutationInput, "permissions">>();
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [previousOpen, setPreviousOpen] = useState(open);
@@ -26,22 +27,29 @@ export default function RolePermissionEditModal({ open, onClose }: Props) {
   // 开启新一轮弹窗时重置提示，避免 Effect 中同步触发额外渲染。
   if (previousOpen !== open) {
     setPreviousOpen(open);
+    setReady(false);
     if (open) setLoadError("");
   }
 
   useEffect(() => {
     if (open) {
-      getPermissionList()
+      const controller = new AbortController();
+      getPermissionList(controller.signal)
         .then(result => {
+          if (controller.signal.aborted) return;
           setPermissionTree(requireApiSuccess(result));
+          setReady(true);
         })
-        .catch(error =>
-          setLoadError(getErrorMessage(error, "权限列表加载失败")),
-        );
+        .catch(error => {
+          if (!controller.signal.aborted)
+            setLoadError(getErrorMessage(error, "权限列表加载失败"));
+        });
+      return () => controller.abort();
     }
   }, [open]);
 
   const handleSubmit = async () => {
+    if (!ready || loading) return;
     setLoading(true);
     try {
       const values = await form.validateFields();
@@ -85,7 +93,12 @@ export default function RolePermissionEditModal({ open, onClose }: Props) {
       footer={
         <div className="flex justify-center gap-4 pb-4">
           <Button onClick={onClose}>取消</Button>
-          <Button loading={loading} onClick={handleSubmit} type="primary">
+          <Button
+            disabled={!ready}
+            loading={loading}
+            onClick={handleSubmit}
+            type="primary"
+          >
             确定
           </Button>
         </div>

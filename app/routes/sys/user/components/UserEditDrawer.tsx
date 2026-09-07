@@ -12,9 +12,10 @@ import {
 } from "antd";
 import { useRevalidator } from "react-router";
 import { updateUser } from "~/services/user";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invalidateRoles } from "~/services/roleCache";
 import type { ConsoleUser, Role, UserMutationInput } from "~/types/api";
+import { getErrorMessage } from "~/utils/errors";
 
 interface Props {
   open: boolean;
@@ -30,8 +31,29 @@ export default function UserEditDrawer({
   roles,
 }: Props) {
   const [form] = Form.useForm<UserMutationInput>();
+  const saveRequestRef = useRef<object | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [previousInput, setPreviousInput] = useState({ open, initialValues });
+  if (
+    previousInput.open !== open ||
+    previousInput.initialValues !== initialValues
+  ) {
+    setPreviousInput({ open, initialValues });
+    setSaving(false);
+  }
+  useLayoutEffect(
+    () => () => {
+      saveRequestRef.current = null;
+    },
+    [open, initialValues],
+  );
+  const close = () => {
+    saveRequestRef.current = null;
+    onClose();
+  };
   useEffect(() => {
     if (open && initialValues) {
+      form.resetFields();
       form.setFieldsValue({
         ...initialValues,
         email: initialValues.email ?? undefined,
@@ -43,14 +65,31 @@ export default function UserEditDrawer({
   }, [open, initialValues, form]);
   const revalidator = useRevalidator();
   const onFinish = async (values: UserMutationInput) => {
-    if (!initialValues) return;
-    const { msg, code } = await updateUser({ id: initialValues.id, ...values });
-    if (code === 0) {
-      onClose();
-      invalidateRoles();
-      await revalidator.revalidate();
+    if (!open || !initialValues || saveRequestRef.current) return;
+    const request = {};
+    saveRequestRef.current = request;
+    setSaving(true);
+    try {
+      const { msg, code } = await updateUser({
+        id: initialValues.id,
+        ...values,
+      });
+      // 即使已切换编辑对象，服务端成功写入仍须使共享角色缓存失效。
+      if (code === 0) invalidateRoles();
+      if (saveRequestRef.current === request) {
+        message[code === 0 ? "success" : "error"](msg);
+        if (code === 0) close();
+      }
+      if (code === 0) await revalidator.revalidate();
+    } catch (error) {
+      if (saveRequestRef.current === request)
+        message.error(getErrorMessage(error, "用户保存失败，请重试"));
+    } finally {
+      if (saveRequestRef.current === request) {
+        saveRequestRef.current = null;
+        setSaving(false);
+      }
     }
-    message[code === 0 ? "success" : "error"](msg);
   };
 
   return (
@@ -59,17 +98,23 @@ export default function UserEditDrawer({
       title="编辑用户"
       closable={false}
       open={open}
-      onClose={onClose}
+      onClose={close}
       extra={
         <Space>
-          <Button onClick={onClose}>取消</Button>
-          <Button onClick={() => form.submit()} type="primary">
+          <Button onClick={close}>取消</Button>
+          <Button loading={saving} onClick={() => form.submit()} type="primary">
             确定
           </Button>
         </Space>
       }
     >
-      <Form layout="vertical" name="user_add" form={form} onFinish={onFinish}>
+      <Form
+        disabled={saving}
+        layout="vertical"
+        name="user_edit"
+        form={form}
+        onFinish={onFinish}
+      >
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item

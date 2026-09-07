@@ -144,13 +144,15 @@ export default function User() {
   const navigation = useNavigation();
   const { form, initialValues, handleSearch, handleReset, onPageChange } =
     useTableQuery<FormValues>({
+      pageSize: users.size,
       dateFields: ["createdAtRange"],
       numberFields: ["roles"],
+      arrayFields: ["roles"],
     });
 
   return (
     <>
-      <RoleCards />
+      <RoleCards roles={roles} />
       <div className="mb-6 mt-6">
         <h2 className="text-xl font-bold text-gray-800">用户</h2>
         <p className="text-sm text-gray-400 mt-1.5 leading-relaxed max-w-3xl">
